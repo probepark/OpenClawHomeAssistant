@@ -5,10 +5,15 @@ FROM ${BUILD_FROM}
 # OpenClaw requires Node 20+, so we install a Node 20 musl build directly.
 ARG NODE_VERSION=22.12.0
 
-# Base image may not include community repo; cmake lives there.
-RUN apk add --no-cache \
-    --repository=https://dl-cdn.alpinelinux.org/alpine/v3.18/main \
-    --repository=https://dl-cdn.alpinelinux.org/alpine/v3.18/community \
+# Base image is Alpine, but its exact patch-level varies.
+# Do NOT hardcode v3.xx repos (can cause musl/musl-dev conflicts).
+# Instead, derive the repo version from /etc/alpine-release at build time.
+RUN set -eu; \
+  ALPINE_VER="$(cut -d. -f1,2 /etc/alpine-release)"; \
+  echo "Using Alpine repos for v${ALPINE_VER}"; \
+  apk add --no-cache \
+    --repository="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/main" \
+    --repository="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VER}/community" \
     bash \
     git \
     openssh-client \
