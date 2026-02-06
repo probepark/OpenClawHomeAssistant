@@ -1,5 +1,7 @@
 # OpenClaw Assistant – Home Assistant Add-on
 
+![OpenClaw Assistant](https://github.com/techartdev/OpenClawHomeAssistant/blob/main/oca_addon.png?raw=true)
+
 This repository contains a Home Assistant add-on that runs **OpenClaw** inside **Home Assistant OS (HAOS)**.
 
 > Upstream rename history (FYI): clawdbot → moltbot → **openclaw** (final).
@@ -42,6 +44,8 @@ So we **don’t embed** it. Instead, the Ingress page gives you a button that op
    - `openclaw configure`
 3. (Optional, but recommended) Set **gateway_public_url** in add-on options.
    - Then the Ingress page will show an "Open Gateway Web UI" button.
+  
+See **[DOCS.md](DOCS.md)** for a step-by-step first-time setup guide + troubleshooting.
 
 ## Add-on options (kept intentionally small)
 
@@ -52,45 +56,6 @@ See `openclaw_assistant/config.yaml` for the authoritative schema.
 - `timezone`
 - `homeassistant_token` (optional) — written to `/config/secrets/homeassistant.token` for local scripts.
 - `router_ssh_*` (optional) — SSH settings for a router/network device (custom automation).
-
-## Features
-
-### Browser Automation (Chromium)
-
-This add-on includes **Chromium** for website automation tasks. OpenClaw can use it for browser-based skills and automation.
-
-#### Configuration
-
-OpenClaw's browser tool uses its own control service/protocol. Configure it in one of two ways:
-
-**Option 1: Via `openclaw.json`**
-
-Add to `/config/.openclaw/openclaw.json`:
-
-```json
-{
-  "browser": {
-    "enabled": true,
-    "headless": true,
-    "noSandbox": true,
-    "cdpUrl": "http://127.0.0.1:9222"
-  }
-}
-```
-
-**Option 2: Via Gateway Flags**
-
-Start OpenClaw gateway with browser flags:
-
-```bash
-openclaw gateway --browser-headless --browser-no-sandbox
-```
-
-**Note:** The `noSandbox` flag is required in Docker containers due to security restrictions.
-
-## Docs
-
-See **DOCS.md** for a step-by-step first-time setup guide + troubleshooting.
 
 ## Support / Donations
 
