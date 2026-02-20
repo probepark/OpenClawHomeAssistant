@@ -381,25 +381,6 @@ if [ "$GATEWAY_MODE" = "remote" ]; then
     wss|https) USE_TLS="--tls" ;;
   esac
 
-  # Write gateway token to node config so openclaw can authenticate
-  # The node reads the pairing token from its config file
-  NODE_CONFIG_DIR="/config/.openclaw"
-  mkdir -p "$NODE_CONFIG_DIR"
-  python3 -c "
-import json, pathlib
-p = pathlib.Path('$NODE_CONFIG_DIR/openclaw.json')
-cfg = json.loads(p.read_text()) if p.exists() else {}
-if 'node' not in cfg: cfg['node'] = {}
-cfg['node']['gateway'] = {
-    'host': '$REMOTE_HOST',
-    'port': int('$REMOTE_PORT'),
-    'tls': True if '$USE_TLS' else False,
-    'token': '$REMOTE_GATEWAY_TOKEN'
-}
-p.write_text(json.dumps(cfg, indent=2) + '\n')
-print('INFO: Wrote node gateway config')
-"
-
   echo "Starting OpenClaw node (remote mode)..."
   echo "  Gateway:  $REMOTE_HOST:$REMOTE_PORT (TLS: ${USE_TLS:-no})"
   echo "  Node:     $REMOTE_NODE_NAME"
