@@ -52,9 +52,19 @@ options:
 
   # Gateway mode:
   # - local: Run gateway locally (recommended for most users)
-  # - remote: Connect to a remote gateway
+  # - remote: Connect to a remote gateway as a node
   # Default is local.
   gateway_mode: local
+
+  # Remote gateway URL (required when gateway_mode=remote)
+  # Example: "wss://my-server.tail1234.ts.net" or "wss://example.com:18789"
+  remote_gateway_url: ""
+
+  # Remote gateway auth token (required when gateway_mode=remote)
+  remote_gateway_token: ""
+
+  # Node name for remote mode (optional, defaults to "homeassistant")
+  remote_node_name: "homeassistant"
 
   # Gateway network bind mode:
   # - loopback: bind to 127.0.0.1 only (local access only, more secure)
@@ -95,6 +105,9 @@ schema:
   clean_session_locks_on_start: bool?
   clean_session_locks_on_exit: bool?
   gateway_mode: list(local|remote)?
+  remote_gateway_url: str?
+  remote_gateway_token: password?
+  remote_node_name: str?
   gateway_bind_mode: list(loopback|lan)?
   gateway_port: int(1,65535)?
   enable_openai_api: bool?

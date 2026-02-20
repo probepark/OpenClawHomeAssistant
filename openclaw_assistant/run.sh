@@ -51,6 +51,9 @@ GATEWAY_PORT=$(jq -r '.gateway_port // 18789' "$OPTIONS_FILE")
 ENABLE_OPENAI_API=$(jq -r '.enable_openai_api // false' "$OPTIONS_FILE")
 ALLOW_INSECURE_AUTH=$(jq -r '.allow_insecure_auth // false' "$OPTIONS_FILE")
 FORCE_IPV4_DNS=$(jq -r '.force_ipv4_dns // false' "$OPTIONS_FILE")
+REMOTE_GATEWAY_URL=$(jq -r '.remote_gateway_url // empty' "$OPTIONS_FILE")
+REMOTE_GATEWAY_TOKEN=$(jq -r '.remote_gateway_token // empty' "$OPTIONS_FILE")
+REMOTE_NODE_NAME=$(jq -r '.remote_node_name // "homeassistant"' "$OPTIONS_FILE")
 
 export TZ="$TZNAME"
 
@@ -330,7 +333,7 @@ if [ ! -f "$HELPER_PATH" ] && [ -f "$(dirname "$0")/oc_config_helper.py" ]; then
   HELPER_PATH="$(dirname "$0")/oc_config_helper.py"
 fi
 
-if [ -f "$OPENCLAW_CONFIG_PATH" ]; then
+if [ "$GATEWAY_MODE" != "remote" ] && [ -f "$OPENCLAW_CONFIG_PATH" ]; then
   if [ -f "$HELPER_PATH" ]; then
     if ! python3 "$HELPER_PATH" apply-gateway-settings "$GATEWAY_MODE" "$GATEWAY_BIND_MODE" "$GATEWAY_PORT" "$ENABLE_OPENAI_API" "$ALLOW_INSECURE_AUTH"; then
       rc=$?
@@ -347,9 +350,78 @@ else
   echo "INFO: Run 'openclaw onboard' first, then restart the add-on"
 fi
 
-echo "Starting OpenClaw Assistant gateway (openclaw)..."
-openclaw gateway run &
-GW_PID=$!
+if [ "$GATEWAY_MODE" = "remote" ]; then
+  # --------------------------------------------------------------------------
+  # REMOTE MODE: Connect to an existing gateway as a node
+  # --------------------------------------------------------------------------
+  if [ -z "$REMOTE_GATEWAY_URL" ] || [ -z "$REMOTE_GATEWAY_TOKEN" ]; then
+    echo "ERROR: remote mode requires remote_gateway_url and remote_gateway_token"
+    echo "Please set them in the add-on Configuration tab."
+    exit 1
+  fi
+  # Parse URL into host/port/tls
+  # Supports: wss://host, wss://host:port, ws://host:port, https://host, http://host:port
+  REMOTE_PROTO="${REMOTE_GATEWAY_URL%%://*}"
+  REMOTE_HOSTPORT="${REMOTE_GATEWAY_URL#*://}"
+  REMOTE_HOSTPORT="${REMOTE_HOSTPORT%%/*}"  # strip path
+
+  if echo "$REMOTE_HOSTPORT" | grep -q ':'; then
+    REMOTE_HOST="${REMOTE_HOSTPORT%%:*}"
+    REMOTE_PORT="${REMOTE_HOSTPORT##*:}"
+  else
+    REMOTE_HOST="$REMOTE_HOSTPORT"
+    case "$REMOTE_PROTO" in
+      wss|https) REMOTE_PORT=443 ;;
+      *)         REMOTE_PORT=18789 ;;
+    esac
+  fi
+
+  USE_TLS=""
+  case "$REMOTE_PROTO" in
+    wss|https) USE_TLS="--tls" ;;
+  esac
+
+  # Write gateway token to node config so openclaw can authenticate
+  # The node reads the pairing token from its config file
+  NODE_CONFIG_DIR="/config/.openclaw"
+  mkdir -p "$NODE_CONFIG_DIR"
+  python3 -c "
+import json, pathlib
+p = pathlib.Path('$NODE_CONFIG_DIR/openclaw.json')
+cfg = json.loads(p.read_text()) if p.exists() else {}
+if 'node' not in cfg: cfg['node'] = {}
+cfg['node']['gateway'] = {
+    'host': '$REMOTE_HOST',
+    'port': int('$REMOTE_PORT'),
+    'tls': True if '$USE_TLS' else False,
+    'token': '$REMOTE_GATEWAY_TOKEN'
+}
+p.write_text(json.dumps(cfg, indent=2) + '\n')
+print('INFO: Wrote node gateway config')
+"
+
+  echo "Starting OpenClaw node (remote mode)..."
+  echo "  Gateway:  $REMOTE_HOST:$REMOTE_PORT (TLS: ${USE_TLS:-no})"
+  echo "  Node:     $REMOTE_NODE_NAME"
+
+  NODE_ARGS="--host $REMOTE_HOST --port $REMOTE_PORT --display-name $REMOTE_NODE_NAME"
+  if [ -n "$USE_TLS" ]; then
+    NODE_ARGS="$NODE_ARGS $USE_TLS"
+  fi
+
+  # Pass gateway auth token so the node can authenticate with the remote gateway
+  export OPENCLAW_GATEWAY_TOKEN="$REMOTE_GATEWAY_TOKEN"
+
+  openclaw node run $NODE_ARGS &
+  GW_PID=$!
+else
+  # --------------------------------------------------------------------------
+  # LOCAL MODE: Run gateway locally
+  # --------------------------------------------------------------------------
+  echo "Starting OpenClaw Assistant gateway (openclaw)..."
+  openclaw gateway run &
+  GW_PID=$!
+fi
 
 # Start web terminal (optional)
 TTYD_PID_FILE="/var/run/openclaw-ttyd.pid"
