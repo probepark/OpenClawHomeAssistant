@@ -359,6 +359,38 @@ if [ "$GATEWAY_MODE" = "remote" ]; then
     echo "Please set them in the add-on Configuration tab."
     exit 1
   fi
+  # Resolve Tailscale hostnames via /etc/hosts if MagicDNS is unavailable
+  # Try to resolve the hostname; if it fails, use tailscale CLI to get the IP
+  REMOTE_HOSTNAME="${REMOTE_GATEWAY_URL#*://}"
+  REMOTE_HOSTNAME="${REMOTE_HOSTNAME%%:*}"
+  REMOTE_HOSTNAME="${REMOTE_HOSTNAME%%/*}"
+  if ! getent hosts "$REMOTE_HOSTNAME" >/dev/null 2>&1; then
+    # Try tailscale status to find the IP
+    RESOLVED_IP=""
+    if command -v tailscale >/dev/null 2>&1; then
+      RESOLVED_IP=$(tailscale status --json 2>/dev/null | python3 -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    for p in d.get('Peer',{}).values():
+        if '$REMOTE_HOSTNAME' in p.get('DNSName',''):
+            print(p['TailscaleIPs'][0])
+            break
+except: pass
+" 2>/dev/null || true)
+    fi
+    # Fallback: try dig/nslookup on Tailscale DNS (100.100.100.100)
+    if [ -z "$RESOLVED_IP" ]; then
+      RESOLVED_IP=$(dig +short "$REMOTE_HOSTNAME" @100.100.100.100 2>/dev/null | head -1 || true)
+    fi
+    if [ -n "$RESOLVED_IP" ]; then
+      echo "INFO: Adding $REMOTE_HOSTNAME -> $RESOLVED_IP to /etc/hosts (MagicDNS workaround)"
+      echo "$RESOLVED_IP $REMOTE_HOSTNAME" >> /etc/hosts
+    else
+      echo "WARN: Could not resolve $REMOTE_HOSTNAME — connection may fail"
+    fi
+  fi
+
   # Parse URL into host/port/tls
   # Supports: wss://host, wss://host:port, ws://host:port, https://host, http://host:port
   REMOTE_PROTO="${REMOTE_GATEWAY_URL%%://*}"
