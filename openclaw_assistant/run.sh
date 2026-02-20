@@ -365,9 +365,10 @@ if [ "$GATEWAY_MODE" = "remote" ]; then
   REMOTE_HOSTNAME="${REMOTE_HOSTNAME%%:*}"
   REMOTE_HOSTNAME="${REMOTE_HOSTNAME%%/*}"
   if ! getent hosts "$REMOTE_HOSTNAME" >/dev/null 2>&1; then
-    # Try tailscale status to find the IP
     RESOLVED_IP=""
-    if command -v tailscale >/dev/null 2>&1; then
+
+    # Method 1: tailscale CLI (if available in container)
+    if [ -z "$RESOLVED_IP" ] && command -v tailscale >/dev/null 2>&1; then
       RESOLVED_IP=$(tailscale status --json 2>/dev/null | python3 -c "
 import json,sys
 try:
@@ -379,9 +380,66 @@ try:
 except: pass
 " 2>/dev/null || true)
     fi
-    # Fallback: try dig/nslookup on Tailscale DNS (100.100.100.100)
+
+    # Method 2: query Tailscale MagicDNS resolver directly (100.100.100.100)
     if [ -z "$RESOLVED_IP" ]; then
-      RESOLVED_IP=$(dig +short "$REMOTE_HOSTNAME" @100.100.100.100 2>/dev/null | head -1 || true)
+      if command -v dig >/dev/null 2>&1; then
+        RESOLVED_IP=$(dig +short "$REMOTE_HOSTNAME" @100.100.100.100 2>/dev/null | head -1 || true)
+      elif command -v nslookup >/dev/null 2>&1; then
+        RESOLVED_IP=$(nslookup "$REMOTE_HOSTNAME" 100.100.100.100 2>/dev/null | awk '/^Address: / && !/100\.100\.100\.100/ {print $2; exit}' || true)
+      fi
+    fi
+
+    # Method 3: Python DNS query to Tailscale MagicDNS
+    if [ -z "$RESOLVED_IP" ]; then
+      RESOLVED_IP=$(python3 -c "
+import socket
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(3)
+    import struct
+    # Build DNS query for $REMOTE_HOSTNAME
+    host = '$REMOTE_HOSTNAME'
+    parts = host.split('.')
+    query = b'\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00'
+    for p in parts:
+        query += bytes([len(p)]) + p.encode()
+    query += b'\x00\x00\x01\x00\x01'
+    s.sendto(query, ('100.100.100.100', 53))
+    data = s.recvfrom(512)[0]
+    # Parse answer - last 4 bytes are the IP
+    if len(data) > 12:
+        ip = '.'.join(str(b) for b in data[-4:])
+        if ip.startswith('100.'):
+            print(ip)
+except: pass
+" 2>/dev/null || true)
+    fi
+
+    # Method 4: try host OS resolv.conf nameservers
+    if [ -z "$RESOLVED_IP" ]; then
+      for ns in $(grep '^nameserver' /etc/resolv.conf 2>/dev/null | awk '{print $2}'); do
+        RESOLVED_IP=$(python3 -c "
+import socket
+try:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.settimeout(2)
+    host = '$REMOTE_HOSTNAME'
+    parts = host.split('.')
+    query = b'\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00'
+    for p in parts:
+        query += bytes([len(p)]) + p.encode()
+    query += b'\x00\x00\x01\x00\x01'
+    s.sendto(query, ('$ns', 53))
+    data = s.recvfrom(512)[0]
+    if len(data) > 12:
+        ip = '.'.join(str(b) for b in data[-4:])
+        if not ip.startswith('0.'):
+            print(ip)
+except: pass
+" 2>/dev/null || true)
+        [ -n "$RESOLVED_IP" ] && break
+      done
     fi
     if [ -n "$RESOLVED_IP" ]; then
       echo "INFO: Adding $REMOTE_HOSTNAME -> $RESOLVED_IP to /etc/hosts (MagicDNS workaround)"
