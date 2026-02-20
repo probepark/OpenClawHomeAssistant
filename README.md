@@ -1,7 +1,7 @@
 # OpenClaw Assistant – Home Assistant App/Add-on
 
 ## [Join our Discord Server!](https://discord.gg/Nx4H3XmY)
-![OpenClaw Assistant](https://github.com/techartdev/OpenClawHomeAssistant/blob/main/oca_addon.png?raw=true)
+![OpenClaw Assistant](https://github.com/probepark/OpenClawHomeAssistant/blob/main/oca_addon.png?raw=true)
 
 This repository contains a Home Assistant add-on that runs **OpenClaw** inside **Home Assistant OS (HAOS)**.
 
@@ -34,12 +34,12 @@ This repository contains a Home Assistant add-on that runs **OpenClaw** inside *
 1. Home Assistant → **Settings → Add-ons → Add-on store**
 2. **⋮ → Repositories**
 3. Add this repo:
-   - `https://github.com/techartdev/OpenClawHomeAssistant`
+   - `https://github.com/probepark/OpenClawHomeAssistant`
 4. Install **OpenClaw Assistant**
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=techartdev/OpenClawHomeAssistant&type=date&legend=top-left)](https://www.star-history.com/#techartdev/OpenClawHomeAssistant&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/svg?repos=probepark/OpenClawHomeAssistant&type=date&legend=top-left)](https://www.star-history.com/#probepark/OpenClawHomeAssistant&type=date&legend=top-left)
 
 ## Support / Donations
 
