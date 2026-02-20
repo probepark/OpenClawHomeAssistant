@@ -82,6 +82,20 @@ export XDG_CONFIG_HOME=/config
 
 mkdir -p /config/.openclaw /config/clawd /config/keys /config/secrets
 
+# Ensure exec-approvals.json exists for node host (allows remote command execution)
+EXEC_APPROVALS="/config/.openclaw/exec-approvals.json"
+if [ ! -f "$EXEC_APPROVALS" ]; then
+  cat > "$EXEC_APPROVALS" <<'APPROVALS'
+{
+  "version": 1,
+  "defaults": {
+    "security": "full"
+  }
+}
+APPROVALS
+  echo "INFO: Created exec-approvals.json (security: full)"
+fi
+
 # ------------------------------------------------------------------------------
 # Sync built-in OpenClaw skills from image to persistent storage
 # On each startup, copy new/updated built-in skills so they survive rebuilds.
